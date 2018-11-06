@@ -1,84 +1,135 @@
 package unam.fca.dmoviles;
 
-import android.content.Intent;
-import android.graphics.Bitmap;
-import android.net.Uri;
-import android.provider.MediaStore;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.util.Log;
+import android.support.design.widget.Snackbar;
+import android.support.v4.content.ContextCompat;
+import android.support.v4.widget.SwipeRefreshLayout;
+import android.support.v7.app.AppCompatActivity;
 import android.widget.ImageView;
+import android.widget.TextView;
 
-import java.io.IOException;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
-public class MainActivity extends AppCompatActivity {
+import java.net.MalformedURLException;
+import java.net.URL;
 
-    private final static int IMAGE_WIDTH = 400;
+public class MainActivity extends AppCompatActivity implements SwipeRefreshLayout.OnRefreshListener, IWorkerListener{
+
+
+    private SwipeRefreshLayout mSwipeRefreshLayout;
+    private static String OPEN_WEATHER_URL = "http://api.openweathermap.org/data/2.5/weather?id=3530597&&units=metric&appid=REMPLAZAR_POR_API_KEY";
+
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        //Actividad 7 Ejecucion de tareas en segundo plano
-        //Hasta ahora, hemos ejecutado el codigo en primer plano o en lo que se conoce como
-        //el hilo de interfaz de usuario (UI thread)
+        //Actividad 9 Consulta de un servicio web
+        //En esta actividad crearan una aplicacion que muestre el clima
+        //Se consultara el API de OpenWeather.
 
-        //El UI thread se utiliza para modificar los componentes visuales de Android (animaciones, cambiar valores de controles, transiciones de pantallas...), si tratamos de hacer esto
-        //en segundo plano, la aplicacion dejara de funcionar.
-
-        //El metodo onCreate se ejecuta en el UI thread
-
-        //Pero si hacemos tareas que puedan tardar mucho, como consultar un servidor Web, o modificar
-        //el tamano de una imagen de gran tamano, el UI thread se puede trabar esperando por estos procesos y
-        //la aplicacion se mostrara poco responsiva.
-
-        //Una de las manera de evitar esto, es mover el codigo que pudiera demandar mas recursos
-        //a un proceso en segundo plano.
-        //
-        //En esta actividad exploramos el uso de AsyncTask
-        //Referencias
-        //https://developer.android.com/guide/components/processes-and-threads
-        //https://developer.android.com/reference/android/os/AsyncTask
-
-        // El archivo del layout de la actividad se encuentra en la carpeta
-        // res/layout/activity_main.xml
         setContentView(R.layout.activity_main);
 
 
-        Intent intent = getIntent();
-        String action = intent.getAction();
-        String type = intent.getType();
+        mSwipeRefreshLayout = findViewById(R.id.swipeRefreshLayout);
+        mSwipeRefreshLayout.setColorSchemeResources(R.color.colorAccent, R.color.colorPrimary, R.color.colorPrimaryDark);
+        mSwipeRefreshLayout.setOnRefreshListener(this);
 
-        final ImageView iv = findViewById(R.id.iv);
+        try {
+
+            mSwipeRefreshLayout.setRefreshing(true);
+            new Worker(MainActivity.this).execute(new URL(OPEN_WEATHER_URL));
 
 
-        //Cuando nuestra aplicacion sea iniciada por otra  aplicacion, type no sera nulo
-        if (Intent.ACTION_SEND.equals(action) && type != null) {
-
-            //Verificamos que el mime type del dato sea de una imagen
-            //https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types
-            if (type.startsWith("image/")) {
-
-                Uri imageUri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
-                if (imageUri != null) {
-                    //Se ejecuta el proceso de reduccion de la imagen en segundo plano
-                    //y no interrumpir
-                    new Worker(iv).execute(imageUri);
-                }
-            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
 
 
         //Actividades
-        //a) Revisa la urls de referencia, que metodos se ejecutan en el UI Thread en la actividad?
-        //b) Ejecuta la aplicacion en modo de depuracion, coloca un breakpoint en el metodo doInBackground y otro en el onPostExecute
-        //c) Que ocurre si intentas asignar el bitmap al image view en doInBackground?
-        //  con :  this.imageView.get().setImageBitmap(bitmap);
-        //d) Revisa la urls de referencia, que procesos se pueden ejecutar en segundo plano?
-        //e) Anota tus respuestas y las capturas de pantalla en un documento en Word
-        //f) Sube tu codigo al repositorio.
-        //g) Sube el documento Word a la plataforma Moodle. Incluye la liga a tu repositorio
+        //a) Crea una cuenta en OpenWeather y obten tu appid (API KEY)
+        //Reemplaza tu API KEY en la URL OPEN_WEATHER_URL en este mismo archivo
+        //b) Android permite mostrar imagenes en formato de vectores. En el foro hay una carpeta con los iconos correspondientes a cada estado del clima
+        //proporcionado por OpenWeather. En la carpeta res->drawable se ha incluido una imagen de tipo vector (ic_w01d.xml)
+        //Para convertir los archivos svg al formato de android, deberan archivo por archivo, dar click derecho en res->drawable->new->Vector asset.
+        //En el cuadro de dialogo seleccionan asset type = local y luego eligen el archivo deseado.
+        //El nombre del archivo debera ser "ic" + nombre del svg como se muestra en ic_w01d
+        //Para ver el porque de estos nombre pueden consultar https://openweathermap.org/weather-conditions
+
+        //c) Ejecuta la aplicacion
+        //d) Que permiso se le tuvo que otorgar a la aplicacion en el archivo AndroidManifest.xml?
+        //e) Para que sirve el control SwipeRefreshLayout, cuantos hijos puede tener?
+        //f) Cuando se ejecuta el metodo onRefresh?
+        //g) En que formato devuelve los datos OpenWeather?
+        //h) Explica que ocurre en el metodo onNetworkSuccess
+        //i) Anota tus respuestas y las capturas de pantalla en un documento en Word
+        //j) Sube tu codigo al repositorio.
+        //k) Sube el documento Word a la plataforma Moodle. Incluye la liga a tu repositorio
 
 
     }
+
+
+    private void setDrawable(ImageView iv, String drawableName) {
+
+        int drawable = getApplicationContext().getResources().getIdentifier(drawableName, "drawable", getPackageName());
+        if (iv != null) {
+            iv.setImageDrawable(ContextCompat.getDrawable(getApplicationContext(), drawable));
+        }
+
+    }
+
+
+    @Override
+    public void onRefresh() {
+        try {
+            new Worker(MainActivity.this).execute(new URL(OPEN_WEATHER_URL));
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        }
+    }
+
+
+
+    @Override
+    public void onNetworkSuccess(JSONObject jsonObject) {
+
+        try {
+            JSONArray weatherArray = jsonObject.getJSONArray("weather");
+            JSONObject weather = weatherArray.getJSONObject(0);
+            JSONObject main = jsonObject.getJSONObject("main");
+
+            String temp = main.getString("temp");
+            String icon = weather.getString("icon");
+            setValues(icon, temp);
+
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        mSwipeRefreshLayout.setRefreshing(false);
+    }
+
+    private void setValues(String iconValue, String tempValue) {
+        final TextView tv = findViewById(R.id.textView);
+
+        String temp = String.format(getResources().getString(R.string.temp_text),tempValue);
+        tv.setText(temp);
+
+        ImageView iv = findViewById(R.id.appCompatImageView);
+        setDrawable(iv, "ic_w" + iconValue);
+    }
+
+    @Override
+    public void onNetworkError(String error) {
+
+        mSwipeRefreshLayout.setRefreshing(false);
+
+        Snackbar snackbar = Snackbar.make(mSwipeRefreshLayout, error, Snackbar.LENGTH_LONG);
+        snackbar.show();
+    }
+
 }

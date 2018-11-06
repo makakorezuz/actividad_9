@@ -1,6 +1,4 @@
 <resources>
     <string name="app_name">DMoviles</string>
-    <string name="nombre"></string>
-    <string name="id_video">id de video de Youtube</string>
-    <string name="btn_video">Ver video</string>
+    <string name="temp_text">%1$s ℃</string>
 </resources>

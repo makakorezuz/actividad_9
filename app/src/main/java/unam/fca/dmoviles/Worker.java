@@ -1,62 +1,92 @@
 package unam.fca.dmoviles;
 
-import android.graphics.Bitmap;
-import android.net.Uri;
 import android.os.AsyncTask;
-import android.widget.ImageView;
+import android.support.v7.app.AppCompatActivity;
 
-import java.io.IOException;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.lang.ref.WeakReference;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
-public class Worker extends AsyncTask <Uri, Void, Bitmap>  {
+public class Worker extends AsyncTask<URL, Void, NetworkResult> {
 
-    private final static int IMAGE_WIDTH = 400;
-    //Es importante usar WeakReference para evitar errores como memory leaks.
-    //Esto es tener referencias a objetos que han sido destruidos.
-    private WeakReference<ImageView> imageView;
+    private WeakReference<AppCompatActivity> activityWeakReference;
 
-    public Worker(ImageView imageView){
-        this.imageView = new WeakReference<>(imageView);
+    public Worker(AppCompatActivity appCompatActivity) {
+        this.activityWeakReference = new WeakReference<>(appCompatActivity);
     }
 
+
     @Override
-    protected Bitmap doInBackground(Uri... uris) {
+    protected NetworkResult doInBackground(URL... urls) {
+        HttpURLConnection urlConnection = null;
+        NetworkResult networkResult = new NetworkResult();
 
-        Bitmap bitmap = null;
+        try {
+            URL url = urls[0];
+            urlConnection = (HttpURLConnection) url.openConnection();
+            urlConnection.setRequestProperty("Content-Type", "application/json");
+            networkResult.setCode(urlConnection.getResponseCode());
 
-        //doInBackground se ejecuta en segundo plano independientemente de MainActivity. Si MainActivity fuera destruida por falta de recursos
-        //por el sistema operativo, el metodo this.imageView.get() regresaria null
-        if(this.imageView.get() != null && uris.length > 0){
+            String line;
+            StringBuilder sb = new StringBuilder();
+            InputStream is;
 
-            try {
-
-                Uri imageUri = uris[0];
-
-                //En la actividad 6 obteniamos el contexto con el metodo getApplicationContext()
-                //En un AsyncTask, este metodo no esta disponible.
-                //Para obtener el contexto lo hacemos mediante el imageView.
-                //Para obtener una referencia al imageview es necesario usar el metodo this,imageview.get()
-                //y finalmente obtenemos el contexto con el metodo getContext()
-
-                bitmap = ImageUtils.getScaledBitmapFromUri(this.imageView.get().getContext(),imageUri, IMAGE_WIDTH);
-
-                //Con Thread.sleep, simulamos que el proceso tarda 3 segundos mas
-                Thread.sleep(3000);
-            } catch (IOException | InterruptedException e) {
-                e.printStackTrace();
+            if (networkResult.getCode() == HttpURLConnection.HTTP_OK) {
+                is = urlConnection.getInputStream();
+            } else {
+                is = urlConnection.getErrorStream();
+            }
+            BufferedReader br = new BufferedReader(new InputStreamReader(is));
+            while ((line = br.readLine()) != null) {
+                sb.append(line);
             }
 
-            return bitmap;
+            String result = sb.toString();
+
+
+            if (networkResult.getCode() == HttpURLConnection.HTTP_OK) {
+                JSONObject jsonObject = new JSONObject(result);
+                networkResult.setResult(jsonObject);
+
+            }else{
+                networkResult.setError(result);
+            }
+
+
+        } catch (Exception e) {
+            networkResult.setError(e.getMessage());
+        } finally {
+            if (urlConnection != null) {
+                urlConnection.disconnect();
+            }
         }
-        return null;
+        return networkResult;
     }
 
     @Override
-    protected void onPostExecute(Bitmap bitmap) {
+    protected void onPostExecute(NetworkResult networkResult) {
 
-        //El metodo onPostExecute se ejecuta en el UI thread, por lo que podemos asignar la imagen al imageView
-        if (this.imageView.get() != null && bitmap != null){
-            this.imageView.get().setImageBitmap(bitmap);
+        //El metodo onPostExecute se ejecuta en el UI thread
+        if (this.activityWeakReference.get() != null && networkResult != null) {
+
+            AppCompatActivity appCompatActivity = this.activityWeakReference.get();
+            if (appCompatActivity instanceof IWorkerListener) {
+
+                IWorkerListener iWorkerListener = (IWorkerListener) appCompatActivity;
+
+                if (networkResult.getResult() != null) {
+                    iWorkerListener.onNetworkSuccess(networkResult.getResult());
+                } else {
+                    iWorkerListener.onNetworkError(networkResult.getError());
+                }
+
+            }
+
         }
     }
 }
